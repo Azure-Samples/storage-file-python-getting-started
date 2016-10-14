@@ -57,7 +57,6 @@ class FileBasicSamples():
         file_service = account.create_file_service()
         
         try:
-            # Create 
             print('\n\n* Basic file operations *\n')
             self.basic_file_operations(file_service, sharename, filename)
 
@@ -96,6 +95,18 @@ class FileBasicSamples():
             'Hello World! - from text sample')    # file text
         print('Sample file "' + filename + '" created and uploaded to: ' + sharename + '/mydirectory')
   
+        # Demonstrate how to copy a file
+        print('\nCopying file ' + filename)
+        sourcefile = file_service.make_file_url(sharename, 'mydirectory', filename)
+        copy = file_service.copy_file(sharename, None, 'file1copy', sourcefile)
+
+        if(copy.status ==  'pending'):
+            # Demonstrate how to abort a copy operation (just for demo, probably will never get here)
+            print('Abort copy operation')
+            file_service.abort_copy_file(sharename, None, 'file1copy', copy.id)
+        else:
+            print('Copy was a ' + copy.status)
+
         # Demonstrate how to create a share and upload a file from a local temporary file path
         print('\nAttempting to upload a sample file from path for upload demonstration.')  
         # Creating a temporary file to upload to Azure Files
@@ -117,6 +128,13 @@ class FileBasicSamples():
 
         # Close the temp file
         my_temp_file.close()
+
+        # Get the list of valid ranges and write to the specified range
+        print('\nGet list of valid ranges of the file.') 
+        ranges = file_service.list_ranges(sharename, None, filename)
+        data = b'abcdefghijkl'
+        print('Put a range of data to the file.')
+        file_service.update_range(sharename, None, filename, data, ranges[0].start, ranges[0].end)
 
         # Demonstrate how to download a file from Azure Files
         # The following example download the file that was previously uploaded to Azure Files
