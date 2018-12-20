@@ -23,7 +23,12 @@ import config
 import azure.common
 from random_data import RandomData
 
-from azure.storage.common import CloudStorageAccount
+from azure.storage.common import (
+    CloudStorageAccount,
+    Metrics,
+    CorsRule,
+    RetentionPolicy
+)
 from azure.storage.file import FileService
 
 #
