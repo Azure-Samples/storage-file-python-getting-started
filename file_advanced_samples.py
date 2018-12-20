@@ -23,10 +23,8 @@ import config
 import azure.common
 from random_data import RandomData
 
-from azure.common import AzureException
-from azure.storage import CloudStorageAccount
+from azure.storage.common import CloudStorageAccount
 from azure.storage.file import FileService
-from azure.storage.models import CorsRule, Logging, Metrics, RetentionPolicy
 
 #
 # Azure File Service Sample - Demonstrate how to perform common tasks using the Microsoft Azure File Service.  

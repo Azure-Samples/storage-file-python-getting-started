@@ -27,8 +27,8 @@
 # 3. Set breakpoints and run the project. 
 #---------------------------------------------------------------------------
 import config
-import azure.common
-from azure.storage import CloudStorageAccount
+import azure.storage.common
+from azure.storage.common import CloudStorageAccount
 from file_basic_samples import FileBasicSamples
 from file_advanced_samples import FileAdvancedSamples
 
