@@ -24,8 +24,7 @@ import time
 import config
 import azure.common
 
-from azure.common import AzureException
-from azure.storage import CloudStorageAccount
+from azure.storage.common import CloudStorageAccount
 from azure.storage.file import FileService
 
 #
