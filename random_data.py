@@ -1,7 +1,10 @@
-import random, string
+import random
+import string
 from random import randint
 
 # Gets random data to use in samples
+
+
 class RandomData:
     # Gets random characters to use for generating unique name.
     def get_random_name(self, length):
