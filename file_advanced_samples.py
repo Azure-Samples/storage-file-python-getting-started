@@ -14,13 +14,7 @@
 # places, or events is intended or should be inferred.
 #--------------------------------------------------------------------------
 
-# import uuid
-# import io
-# import tempfile
-# import fileinput
 import os
-# import config
-# import azure.common
 from random_data import RandomData
 
 from azure.storage.fileshare import ShareServiceClient
