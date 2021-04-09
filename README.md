@@ -16,9 +16,8 @@ To run the sample using the Storage Emulator:
 3. Run the project. 
 
 To run the sample using the Storage Service
-1. Open the config.py file and set IS_EMULATED to false.
-2. Create a Storage Account through the Azure Portal and provide your STORAGE_ACCOUNT_NAME and STORAGE_ACCOUNT_KEY in the config.py file. See https://azure.microsoft.com/en-us/documentation/articles/storage-create-storage-account/ for more information.
-3. Set breakpoints and run the project. 
+1. Create a Storage Account through the Azure Portal and provide your STORAGE_CONNECTION_STRING in the config.py file. See https://azure.microsoft.com/en-us/documentation/articles/storage-create-storage-account/ for more information.
+2. Set breakpoints and run the project.
 
 ## Deploy this sample 
 

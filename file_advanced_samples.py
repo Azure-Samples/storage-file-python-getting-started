@@ -14,22 +14,17 @@
 # places, or events is intended or should be inferred.
 #--------------------------------------------------------------------------
 
-import uuid
-import io
-import tempfile
-import fileinput
+# import uuid
+# import io
+# import tempfile
+# import fileinput
 import os
-import config
-import azure.common
+# import config
+# import azure.common
 from random_data import RandomData
 
-from azure.storage.common import (
-    CloudStorageAccount,
-    Metrics,
-    CorsRule,
-    RetentionPolicy
-)
-from azure.storage.file import FileService
+from azure.storage.fileshare import ShareServiceClient
+from azure.storage.fileshare import CorsRule, RetentionPolicy, Metrics
 
 #
 # Azure File Service Sample - Demonstrate how to perform common tasks using the Microsoft Azure File Service.  
@@ -47,62 +42,62 @@ class FileAdvancedSamples():
         self.random_data = RandomData()
     
     # Runs all samples for Azure Storage File service.
-    # Input Arguments:
-    # account - CloudStorageAccount to use for running the samples
-    def run_all_samples(self, account):
+    def run_all_samples(self, connection_string):
         print('Azure Storage File Advanced samples - Starting.')
         
         try:
-            # Create a new file service that can be passed to all methods
-            file_service = account.create_file_service()
+            # Create an instance of ShareServiceClient
+            service = ShareServiceClient.from_connection_string(conn_str=connection_string)
 
             # List shares
             print('\n\n* List shares *\n')
-            self.list_shares(file_service)
-            
+            self.list_shares(service)
+
             # Set Cors
             print('\n\n* Set cors rules *\n')
-            self.set_cors_rules(file_service)
-            
+            self.set_cors_rules(service)
+
             # Set Service Properties
             print('\n\n* Set service properties *\n')
-            self.set_service_properties(file_service)
+            self.set_service_properties(service)
 
             # Share, directory and file properties and metadata
             print('\n\n* Metadata and properties *\n')
-            self.metadata_and_properties(file_service)
+            self.metadata_and_properties(service)
 
         except Exception as e:
-            print('Error occurred in the sample. Please make sure the account name and key are correct.', e) 
+            print('Error occurred in the sample.', e) 
 
         finally:
             print('\nAzure Storage File Advanced samples - Completed.\n')
     
     # List file shares
-    def list_shares(self, file_service):
+    def list_shares(self, service):
         share_prefix = 'sharesample' + self.random_data.get_random_name(6)
 
         try:        
             print('1. Create multiple shares with prefix: ', share_prefix)
             for i in range(5):
-                file_service.create_share(share_prefix + str(i))
+                service.create_share(share_name=share_prefix + str(i))
             
             print('2. List shares')
-            
-            shares =  file_service.list_shares()
-            
+            shares = service.list_shares()
             for share in shares:
                 print('  Share name:' + share.name)
+
+        except Exception as e:
+            print(e) 
+
         finally:
             print('3. Delete shares with prefix:' + share_prefix) 
             for i in range(5):
-                if(file_service.exists(share_prefix + str(i))):
-                    file_service.delete_share(share_prefix + str(i))
+                service.delete_share(share_prefix + str(i))
+    
 
     # Set CORS
-    def set_cors_rules(self, file_service):
+    def set_cors_rules(self, service):
         print('1. Get Cors Rules')
-        original_cors_rules = file_service.get_file_service_properties().cors
+        original_cors_rules = service.get_service_properties()['cors']
 
         print('2. Overwrite Cors Rules')
         cors_rule = CorsRule(
@@ -113,19 +108,22 @@ class FileAdvancedSamples():
             max_age_in_seconds=3600)
 
         try:
-            file_service.set_file_service_properties(cors=[cors_rule])
+            service.set_service_properties(cors=[cors_rule])
+        except Exception as e:
+            print(e)
         finally:
             #reverting cors rules back to the original ones
             print('3. Revert Cors Rules back the original ones')
-            file_service.set_file_service_properties(cors=original_cors_rules)
+            service.set_service_properties(cors=original_cors_rules)
         
         print("CORS sample completed")
     
+
     # Manage properties of the File service, including logging and metrics settings, and the default service version.
-    def set_service_properties(self, file_service):
+    def set_service_properties(self, service):
 
         print('1. Get File service properties')
-        props = file_service.get_file_service_properties()
+        props = service.get_service_properties()
 
         retention = RetentionPolicy(enabled=True, days=5)
         hour_metrics = Metrics(enabled=True, include_apis=True, retention_policy=retention)
@@ -133,16 +131,17 @@ class FileAdvancedSamples():
 
         try:
             print('2. Ovewrite File service properties')
-            file_service.set_file_service_properties(hour_metrics=hour_metrics, minute_metrics=minute_metrics)
+            service.set_service_properties(hour_metrics=hour_metrics, minute_metrics=minute_metrics)
 
         finally:
             print('3. Revert File service properties back to the original ones')
-            file_service.set_file_service_properties(hour_metrics=props.hour_metrics, minute_metrics=props.minute_metrics)
+            service.set_service_properties(hour_metrics=props['hour_metrics'], minute_metrics=props['minute_metrics'])
 
         print('4. Set File service properties completed')
     
+
     # Manage metadata and properties of the share
-    def metadata_and_properties(self, file_service):
+    def metadata_and_properties(self, service):
         share_name = 'sharename' + self.random_data.get_random_name(6)
 
         try:
@@ -151,14 +150,14 @@ class FileAdvancedSamples():
             print('1. Create sample share with name ' + share_name)
             quota = 1 # in GB
             metadata = { "foo": "bar", "baz": "foo" }
-            file_service.create_share(share_name, metadata, quota)
+            share_client = service.create_share(share_name=share_name)
             print('Sample share "'+ share_name +'" created.')
 
             print('2. Get share properties.')
-            properties = file_service.get_share_properties(share_name)
+            properties = share_client.get_share_properties()
 
             print('3. Get share metadata.')
-            get_metadata = file_service.get_share_metadata(share_name)
+            get_metadata = properties['metadata']
             for k, v in get_metadata.items():
                 print("\t" + k + ": " + v)
 
@@ -166,14 +165,14 @@ class FileAdvancedSamples():
 
             print('4. Create sample directory with name ' + dir_name)
             metadata = { "abc": "def", "jkl": "mno" }
-            file_service.create_directory(share_name, dir_name, metadata)
+            directory_client = share_client.create_directory(dir_name, metadata=metadata)
             print('Sample directory "'+ dir_name +'" created.')
 
             print('5. Get directory properties.')
-            properties = file_service.get_directory_properties(share_name, dir_name)
+            properties = directory_client.get_directory_properties()
             
             print('6. Get directory metadata.')
-            get_metadata = file_service.get_directory_metadata(share_name, dir_name)
+            get_metadata = properties['metadata']
             for k, v in get_metadata.items():
                 print("\t" + k + ": " + v)
 
@@ -181,33 +180,29 @@ class FileAdvancedSamples():
             # Uploading text to share_name/dir_name/sample.txt in Azure Files account.
             # Max capacity: 1TB per file
             print('7. Upload sample file from text to directory.')
-            metadata = { "prop1": "val1", "prop2": "val2" }   
-            file_service.create_file_from_text(
-                share_name,              # share        
-                dir_name,          # directory path - root path if none
-                file_name,               # destination file name
-                'Hello World! - from text sample', # file text 
-                metadata=metadata) # metadata
+            metadata = { "prop1": "val1", "prop2": "val2" }
+            file_client = directory_client.get_file_client(file_name)
+            file_client.upload_file('Hello World! - from text sample', metadata=metadata)
             print('Sample file "' + file_name + '" created and uploaded to: ' + share_name + '/' + dir_name)        
 
             print('8. Get file properties.')
-            properties = file_service.get_file_properties(share_name, dir_name, file_name)
+            properties = file_client.get_file_properties()
 
             print('9. Get file metadata.')
-            get_metadata = file_service.get_file_metadata(share_name, dir_name, file_name)
+            get_metadata = properties['metadata']
             for k, v in get_metadata.items():
                 print("\t" + k + ": " + v)
 
             # This is for demo purposes, all files will be deleted when share is deleted
             print('10. Delete file.')
-            file_service.delete_file(share_name, dir_name, file_name)
+            file_client.delete_file()
 
             # This is for demo purposes, all directories will be deleted when share is deleted
             print('11. Delete directory.')
-            file_service.delete_directory(share_name, dir_name)
+            directory_client.delete_directory()
 
         finally:
             print('12. Delete share.')
-            file_service.delete_share(share_name)
+            share_client.delete_share(share_name)
 
         print("Metadata and properties sample completed")
