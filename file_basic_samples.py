@@ -14,114 +14,102 @@
 # places, or events is intended or should be inferred.
 #--------------------------------------------------------------------------
 
-import uuid
 from random_data import RandomData
-import io
 import tempfile
-import fileinput
 import os
-import time
-import config
-import azure.common
 
-from azure.storage.common import CloudStorageAccount
-from azure.storage.file import FileService
+from azure.storage.fileshare import ShareServiceClient
 
-#
-# Azure File Service Sample - Demonstrate how to perform common tasks using the Microsoft Azure File Service.  
-#  
-# Documentation References:  
-#  - What is a Storage Account - http://azure.microsoft.com/en-us/documentation/articles/storage-whatis-account/  
-#  - Getting Started with Files - https://azure.microsoft.com/en-us/documentation/articles/storage-python-how-to-use-file-storage/  
-#  - File Service Concepts - http://msdn.microsoft.com/en-us/library/dn166972.aspx  
-#  - File Service REST API - http://msdn.microsoft.com/en-us/library/dn167006.aspx  
-#  - Storage Emulator - http://azure.microsoft.com/en-us/documentation/articles/storage-use-emulator/
-#  
+
 class FileBasicSamples():
 
     def __init__(self):
         self.random_data = RandomData()
 
     # Runs all samples for Azure Storage File service.
-    # Input Arguments:
-    # account - CloudStorageAccount to use for running the samples
-    def run_all_samples(self, account):
+    def run_all_samples(self, connection_string):
         print('Azure Storage File Basis samples - Starting.')
         
         #declare variables
         filename = 'filesample' + self.random_data.get_random_name(6)
         sharename = 'sharesample' + self.random_data.get_random_name(6)
         
-        # Create a new file service that can be passed to all methods
-        file_service = account.create_file_service()
-        
         try:
+            # Create an instance of ShareServiceClient
+            service = ShareServiceClient.from_connection_string(conn_str=connection_string)
+
             print('\n\n* Basic file operations *\n')
-            self.basic_file_operations(file_service, sharename, filename)
+            self.basic_file_operations(sharename, filename, service)
 
         except Exception as e:
-            print('Error occurred in the sample. Please make sure the account name and key are correct.', e) 
+            print('error:' + e) 
 
         finally:
             # Delete all Azure Files created in this sample
-            self.file_delete_samples(file_service, sharename, filename)
+            self.file_delete_samples(sharename, filename, service)
 
         print('\nAzure Storage File Basic samples - Completed.\n')
     
-    def basic_file_operations(self, file_service, sharename, filename):
+    def basic_file_operations(self, sharename, filename, service):
         # Creating an SMB file share in your Azure Files account.
         print('\nAttempting to create a sample file from text for upload demonstration.')   
         # All directories and share must be created in a parent share.
         # Max capacity: 5TB per share
-        print('Creating sample share.') 
-        file_service.create_share(sharename)
+
+        print('Creating sample share.')
+        share_client = service.create_share(share_name=sharename)
         print('Sample share "'+ sharename +'" created.')
+
 
         # Creating an optional file directory in your Azure Files account.
         print('Creating a sample directory.')    
-        file_service.create_directory(
-            sharename, 
-            'mydirectory')
+        # Get the directory client
+        directory_client = share_client.create_directory("mydirectory")
         print('Sample directory "mydirectory" created.')
 
-        # Uploading text to sharename/mydirectory/my_text_file.txt in Azure Files account.
+
+        # Uploading text to sharename/mydirectory/my_text_file in Azure Files account.
         # Max capacity: 1TB per file
         print('Uploading a sample file from text.')   
-        file_service.create_file_from_text(
-            sharename,              # share        
-            'mydirectory',          # directory path - root path if none
-            filename,               # destination file name
-            'Hello World! - from text sample')    # file text
+        # create_file_client
+        file_client = directory_client.get_file_client(filename)
+        # Upload a file
+        file_client.upload_file('Hello World! - from text sample')
         print('Sample file "' + filename + '" created and uploaded to: ' + sharename + '/mydirectory')
   
+
         # Demonstrate how to copy a file
         print('\nCopying file ' + filename)
-        sourcefile = file_service.make_file_url(sharename, 'mydirectory', filename)
-        copy = file_service.copy_file(sharename, None, 'file1copy', sourcefile)
+        # Create another file client which will copy the file from url
+        destination_file_client = share_client.get_file_client('file1copy')
 
-        if(copy.status ==  'pending'):
+        # Copy the sample source file from the url to the destination file
+        copy_resp = destination_file_client.start_copy_from_url(source_url=file_client.url)
+        if copy_resp['copy_status'] ==  'pending':
             # Demonstrate how to abort a copy operation (just for demo, probably will never get here)
             print('Abort copy operation')
-            file_service.abort_copy_file(sharename, None, 'file1copy', copy.id)
+            destination_file.abort_copy()
         else:
-            print('Copy was a ' + copy.status)
+            print('Copy was a ' + copy_resp['copy_status'])
+        
 
         # Demonstrate how to create a share and upload a file from a local temporary file path
         print('\nAttempting to upload a sample file from path for upload demonstration.')  
         # Creating a temporary file to upload to Azure Files
         print('Creating a temporary file from text.') 
-        with tempfile.NamedTemporaryFile(delete=False) as my_temp_file: #
+        with tempfile.NamedTemporaryFile(delete=False) as my_temp_file:
             my_temp_file.file.write(b"Hello world!")
         print('Sample temporary file created.') 
 
-        # Uploading my_temp_file to sharename/mydirectory folder in Azure Files
+        # Uploading my_temp_file to sharename folder in Azure Files
         # Max capacity: 1TB per file
-        print('Uploading a sample file from local path.')                    
-        file_service.create_file_from_path(
-            sharename,              # share name
-            None,                   # directory path - root path if none
-            filename,               # destination file name
-            my_temp_file.name)      # full source path with file name
+        print('Uploading a sample file from local path.')
+        # Create file_client
+        file_client = share_client.get_file_client(filename)
+
+        # Upload a file
+        with open(my_temp_file.name, "rb") as source_file:
+            file_client.upload_file(source_file)
 
         print('Sample file "' + filename + '" uploaded from path to share: ' + sharename)
 
@@ -130,10 +118,13 @@ class FileBasicSamples():
 
         # Get the list of valid ranges and write to the specified range
         print('\nGet list of valid ranges of the file.') 
-        ranges = file_service.list_ranges(sharename, None, filename)
+        file_ranges = file_client.get_ranges()
+
         data = b'abcdefghijkl'
         print('Put a range of data to the file.')
-        file_service.update_range(sharename, None, filename, data, ranges[0].start, ranges[0].end)
+        
+        file_client.upload_range(data=data, offset=file_ranges[0]['start'], length=len(data))
+
 
         # Demonstrate how to download a file from Azure Files
         # The following example download the file that was previously uploaded to Azure Files
@@ -141,11 +132,9 @@ class FileBasicSamples():
 
         destination_file = tempfile.tempdir + '\mypathfile.txt'
 
-        file_service.get_file_to_path(
-            sharename,              # share name
-            'mydirectory',          # directory path
-            filename,               # source file name
-            destination_file)       # destinatation path with name
+        with open(destination_file, "wb") as file_handle:
+            data = file_client.download_file()
+            data.readinto(file_handle)
 
         print('Sample file downloaded to: ' + destination_file)
 
@@ -155,11 +144,11 @@ class FileBasicSamples():
 
         # Create a generator to list directories and files under share
         # This is not a recursive listing operation
-        generator = file_service.list_directories_and_files(sharename)
+        generator = share_client.list_directories_and_files()
 
         # Prints the directories and files under the share
         for file_or_dir in generator:
-            print(file_or_dir.name)
+            print(file_or_dir['name'])
         
         # remove temp file
         os.remove(my_temp_file.name)
@@ -167,34 +156,32 @@ class FileBasicSamples():
         print('Files and directories under share "' + sharename + '" listed.')
         print('\nCompleted successfully - Azure basic Files operations.')
 
+
     # Demonstrate how to delete azure files created for this demonstration
     # Warning: Deleting a share or directory will also delete all files and directories that are contained in it.
-    def file_delete_samples(self, file_service, sharename, filename):
+    def file_delete_samples(self, sharename, filename, service):
         print('\nDeleting all samples created for this demonstration.')
 
         try:
             # Deleting file: 'sharename/mydirectory/filename'
             # This is for demo purposes only, it's unnecessary, as we're deleting the share later
             print('Deleting a sample file.')
-            file_service.delete_file(
-                sharename,              # share name
-                'mydirectory',          # directory path
-                filename)               # file name to delete
+
+            share_client = service.get_share_client(sharename)
+            directory_client = share_client.get_directory_client('mydirectory')
+            
+            directory_client.delete_file(file_name=filename)
             print('Sample file "' + filename + '" deleted from: ' + sharename + '/mydirectory' )
 
             # Deleting directory: 'sharename/mydirectory'
             print('Deleting sample directory and all files and directories under it.')
-            file_service.delete_directory(
-                sharename,              # share name
-                'mydirectory')          # directory path
+            share_client.delete_directory('mydirectory')
             print('Sample directory "/mydirectory" deleted from: ' + sharename)
 
             # Deleting share: 'sharename'
             print('Deleting sample share ' + sharename + ' and all files and directories under it.')
-            if(file_service.exists(sharename)):
-                file_service.delete_share(
-                    sharename)              # share name
-                print('Sample share "' + sharename + '" deleted.')
+            share_client.delete_share(sharename)
+            print('Sample share "' + sharename + '" deleted.')
 
             print('\nCompleted successfully - Azure Files samples deleted.')
 
